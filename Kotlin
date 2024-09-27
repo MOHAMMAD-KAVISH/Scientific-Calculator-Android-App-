@@ -1,0 +1,212 @@
+package com.example.calculatorproject
+
+import android.os.Bundle
+import android.widget.Button
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import kotlin.math.*
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var resultText: TextView
+    private lateinit var solutionText: TextView
+
+    private var input = ""
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        // Initialize views
+        resultText = findViewById(R.id.resultText)
+        solutionText = findViewById(R.id.solutionText)
+
+        // Initialize buttons
+        val cButton = findViewById<Button>(R.id.cButton)
+        val divideButton = findViewById<Button>(R.id.divideButton)
+        val multiplyButton = findViewById<Button>(R.id.multiplyButton)
+        val plusButton = findViewById<Button>(R.id.plusButton)
+        val minusButton = findViewById<Button>(R.id.minusButton)
+        val equalButton = findViewById<Button>(R.id.equalButton)
+        val deleteButton = findViewById<Button>(R.id.deleteButton)
+        val sinButton = findViewById<Button>(R.id.sinButton)
+        val cosButton = findViewById<Button>(R.id.cosButton)
+        val tanButton = findViewById<Button>(R.id.tanButton)
+        val openBracketButton = findViewById<Button>(R.id.openBracketButton)
+        val closeBracketButton = findViewById<Button>(R.id.closeBracketButton)
+        val moduloButton = findViewById<Button>(R.id.moduloButton)
+
+        // Number buttons
+        val buttons = listOf(
+            findViewById<Button>(R.id.oneButton),
+            findViewById<Button>(R.id.twoButton),
+            findViewById<Button>(R.id.threeButton),
+            findViewById<Button>(R.id.fourButton),
+            findViewById<Button>(R.id.fiveButton),
+            findViewById<Button>(R.id.sixButton),
+            findViewById<Button>(R.id.sevenButton),
+            findViewById<Button>(R.id.eightButton),
+            findViewById<Button>(R.id.nineButton),
+            findViewById<Button>(R.id.zeroButton),
+            findViewById<Button>(R.id.dotButton)
+        )
+
+        // Clear button logic
+        cButton.setOnClickListener {
+            input = ""
+            resultText.text = "0"
+            solutionText.text = ""
+        }
+
+        // Delete button logic
+        deleteButton.setOnClickListener {
+            if (input.isNotEmpty()) {
+                input = input.dropLast(1)
+                solutionText.text = input
+            }
+        }
+
+        // Number and dot button logic
+        for (button in buttons) {
+            button.setOnClickListener {
+                input += (button as Button).text
+                solutionText.text = input
+            }
+        }
+
+        // Operator buttons logic
+        plusButton.setOnClickListener { appendOperator("+") }
+        minusButton.setOnClickListener { appendOperator("-") }
+        multiplyButton.setOnClickListener { appendOperator("×") }
+        divideButton.setOnClickListener { appendOperator("/") }
+        moduloButton.setOnClickListener { appendOperator("%") } // Add this line
+
+        // Brackets buttons logic
+        openBracketButton.setOnClickListener { appendOperator("(") }
+        closeBracketButton.setOnClickListener { appendOperator(")") }
+
+        // Trigonometry buttons logic
+        sinButton.setOnClickListener { appendFunction("sin") }
+        cosButton.setOnClickListener { appendFunction("cos") }
+        tanButton.setOnClickListener { appendFunction("tan") }
+
+        // Equal button logic
+        equalButton.setOnClickListener {
+            calculateResult()
+        }
+    }
+
+    private fun appendOperator(operator: String) {
+        input += operator
+        solutionText.text = input
+    }
+
+    private fun appendFunction(function: String) {
+        input += "$function("
+        solutionText.text = input
+    }
+
+    private fun calculateResult() {
+        try {
+            // Replace custom symbols with recognizable operations for evaluation
+            val finalInput = input.replace("%", " % ") // Space out % for easier parsing
+
+            // Evaluate the expression
+            val result = evaluateExpression(finalInput)
+
+            // Update the result text
+            resultText.text = result.toString()
+
+        } catch (e: Exception) {
+            resultText.text = "Error"
+        }
+    }
+
+    private fun evaluateExpression(expression: String): Double {
+        val exp = ExpressionEvaluator(expression)
+        return exp.evaluate()
+    }
+
+    class ExpressionEvaluator(private val expression: String) {
+
+        private var index = -1
+        private var char: Char = ' '
+
+        fun evaluate(): Double {
+            nextChar()
+            val result = parseExpression()
+            if (index < expression.length) throw RuntimeException("Unexpected character: $char")
+            return result
+        }
+
+        private fun nextChar() {
+            index++
+            char = if (index < expression.length) expression[index] else '\u0000'
+        }
+
+        private fun eat(charToEat: Char): Boolean {
+            while (char == ' ') nextChar()
+            if (char == charToEat) {
+                nextChar()
+                return true
+            }
+            return false
+        }
+
+        private fun parseExpression(): Double {
+            var result = parseTerm()
+            while (true) {
+                when {
+                    eat('+') -> result += parseTerm()
+                    eat('-') -> result -= parseTerm()
+                    else -> return result
+                }
+            }
+        }
+
+        private fun parseTerm(): Double {
+            var result = parseFactor()
+            while (true) {
+                when {
+                    eat('×') -> result *= parseFactor()
+                    eat('/') -> result /= parseFactor()
+                    eat('%') -> result %= parseFactor() // Handle the remainder operation
+                    else -> return result
+                }
+            }
+        }
+
+        private fun parseFactor(): Double {
+            if (eat('+')) return parseFactor()
+            if (eat('-')) return -parseFactor()
+
+            var result: Double
+            val startPos = index
+
+            when {
+                eat('(') -> {
+                    result = parseExpression()
+                    eat(')')
+                }
+                char.isDigit() || char == '.' -> {
+                    while (char.isDigit() || char == '.') nextChar()
+                    result = expression.substring(startPos, index).toDouble()
+                }
+                char.isLetter() -> {
+                    while (char.isLetter()) nextChar()
+                    val func = expression.substring(startPos, index)
+                    result = parseFactor()
+                    result = when (func) {
+                        "sin" -> sin(Math.toRadians(result))
+                        "cos" -> cos(Math.toRadians(result))
+                        "tan" -> tan(Math.toRadians(result))
+                        else -> throw RuntimeException("Unknown function: $func")
+                    }
+                }
+                else -> throw RuntimeException("Unexpected character: $char")
+            }
+
+            return result
+        }
+    }
+}
